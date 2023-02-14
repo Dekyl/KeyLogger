@@ -26,7 +26,7 @@ python server_keylogger_stop.py
 On build folder
 
 ```
-run.exe
+run.exe // double click on it
 ```
 
 ## Issues that may occur
